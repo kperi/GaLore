@@ -58,7 +58,7 @@ def parse_args(args):
     parser.add_argument("--save_dir", type=str, default=None)
     parser.add_argument("--tags", type=str, default=None)
     parser.add_argument("--dtype", type=str, default="bfloat16" if torch.cuda.is_bf16_supported() else "float32")
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--name", type=str, default="test")
     parser.add_argument("--grad_clipping", type=float, default=0.0)   
@@ -83,9 +83,8 @@ def parse_args(args):
 @torch.no_grad()
 def evaluate_model(model,   global_rank, world_size, device, batch_size):
     _time = time.time()
-    val_data = torch.load("./data/small.pt") #datasets.load_dataset("c4", "en", split="validation", streaming=True) #DGX
+    val_data = torch.load("./data/validation.pt") #datasets.load_dataset("c4", "en", split="validation", streaming=True) #DGX
     #val_data = val_data.shuffle(seed=42)
-    val_data = val_data[0:10000]
     logger.info(f"Loaded validation dataset in {time.time() - _time:.2f} seconds")
 
 
@@ -170,23 +169,14 @@ def main(args):
     seed_for_shuffle = 42 
     
 
-    data = torch.load("./data/small.pt")
+    data = torch.load("./data/training.pt")
     logger.info(f"Shuffling data with seed {seed_for_shuffle}")
 
     # it doesn't matter which tokenizer we use, because we train from scratch
     # T5 tokenizer was trained on C4 and we are also training on C4, so it's a good choice
     # tokenizer = AutoTokenizer.from_pretrained("t5-base", model_max_length=args.max_length)
 
-    def preprocess_batched(batch):
-        batch = tokenizer(
-            batch["text"],
-            max_length=args.max_length,
-            truncation=True,
-            padding="max_length",
-            return_tensors="pt",
-        )
-        return batch
-
+    
     dataset = MyDataset(data,batch_size=args.batch_size, max_length=args.max_length)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=None, num_workers=args.workers)
 
