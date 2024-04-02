@@ -84,6 +84,7 @@ def parse_args(args):
 def evaluate_model(model,   global_rank, world_size, device, batch_size):
     _time = time.time()
     val_data = torch.load("./data/validation.pt") #datasets.load_dataset("c4", "en", split="validation", streaming=True) #DGX
+    val_data = val_data[0:100000]
     #val_data = val_data.shuffle(seed=42)
     logger.info(f"Loaded validation dataset in {time.time() - _time:.2f} seconds")
 
@@ -513,16 +514,17 @@ def main(args):
         os.makedirs(args.save_dir, exist_ok=True)
         model.module.save_pretrained(current_model_directory)
 
-        optimizer_checkpoint = {
-            "optimizer": optimizer.state_dict(),
-            "scheduler": scheduler.state_dict(),
-            "update_step": update_step,
-            "global_step": global_step,
-            "config": run_config,
-            "wandb": wandb.run.dir,
-            "dtype": args.dtype,
-        }
-        torch.save(optimizer_checkpoint, f"{current_model_directory}/optimizer.pt")
+        if args.optimizer.lower() != 'galore_adamw8bit_per_layer':
+            optimizer_checkpoint = {
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "update_step": update_step,
+                "global_step": global_step,
+                "config": run_config,
+                "wandb": wandb.run.dir,
+                "dtype": args.dtype,
+            }
+            torch.save(optimizer_checkpoint, f"{current_model_directory}/optimizer.pt")
 
         training_state_checkpoint = {
             "global_step": global_step,
