@@ -167,7 +167,7 @@ def main(args):
         logger.info(f"{k:30} {v}")
     logger.info("*" * 40)
 
-    data = datasets.load_dataset("allenai/c4", "en", split="train", streaming=True)
+    data = datasets.load_dataset("allenai/c4", "el", split="train", streaming=True)
 
     seed_for_shuffle = 42 
     
@@ -180,7 +180,9 @@ def main(args):
 
     # it doesn't matter which tokenizer we use, because we train from scratch
     # T5 tokenizer was trained on C4 and we are also training on C4, so it's a good choice
-    tokenizer = AutoTokenizer.from_pretrained("t5-base", model_max_length=args.max_length)
+    #tokenizer = AutoTokenizer.from_pretrained("t5-base", model_max_length=args.max_length)
+    tokenizer = AutoTokenizer.from_pretrained("Konstantinos/el_llama_3bn")
+
 
     def preprocess_batched(batch):
         batch = tokenizer(
@@ -427,11 +429,14 @@ def main(args):
 
         if global_rank == 0: pbar.update(1)
         
-        if not layer_wise_flag:
-            optimizer.step()
-            scheduler.step()
-            optimizer.zero_grad()
-
+        try:
+            if not layer_wise_flag:
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
+        except: 
+            logger.warning("No optimizer?")
+            
         update_step += 1
         update_time = time.time() - update_time
 
@@ -442,16 +447,19 @@ def main(args):
             os.makedirs(args.save_dir, exist_ok=True)
             model.module.save_pretrained(current_model_directory, max_shard_size='100GB')
 
-            optimizer_checkpoint = {
-                "optimizer": optimizer.state_dict(),
-                "scheduler": scheduler.state_dict(),
-                "update_step": update_step,
-                "global_step": global_step,
-                "config": run_config,
-                "wandb": wandb.run.dir,
-                "dtype": args.dtype,
-            }
-            torch.save(optimizer_checkpoint, f"{current_model_directory}/optimizer.pt")
+            try:
+                optimizer_checkpoint = {
+                    "optimizer": optimizer.state_dict(),
+                    "scheduler": scheduler.state_dict(),
+                    "update_step": update_step,
+                    "global_step": global_step,
+                    "config": run_config,
+                    "wandb": wandb.run.dir,
+                    "dtype": args.dtype,
+                }
+                torch.save(optimizer_checkpoint, f"{current_model_directory}/optimizer.pt")
+            except:
+                logger.warning("No optimizer?")
 
             training_state_checkpoint = {
                 "global_step": global_step,

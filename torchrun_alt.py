@@ -84,7 +84,7 @@ def parse_args(args):
 def evaluate_model(model,   global_rank, world_size, device, batch_size):
     _time = time.time()
     val_data = torch.load("./data/validation.pt") #datasets.load_dataset("c4", "en", split="validation", streaming=True) #DGX
-    val_data = val_data[0:100000]
+    # val_data = val_data[0:100000]
     #val_data = val_data.shuffle(seed=42)
     logger.info(f"Loaded validation dataset in {time.time() - _time:.2f} seconds")
 
@@ -167,12 +167,12 @@ def main(args):
     #data = datasets.load_dataset("allenai/c4", "el", split="train", streaming=True)
 
     
-    seed_for_shuffle = 42 
+    #seed_for_shuffle = 42 
     
 
-    data = torch.load("./data/training.pt")
-    logger.info(f"Shuffling data with seed {seed_for_shuffle}")
-
+    data = torch.load("./data/training.pt") 
+    #logger.info(f"Shuffling data with seed {seed_for_shuffle}")
+    logger.info( f"Training data loaded. Num tokens={len(data)}")
     # it doesn't matter which tokenizer we use, because we train from scratch
     # T5 tokenizer was trained on C4 and we are also training on C4, so it's a good choice
     # tokenizer = AutoTokenizer.from_pretrained("t5-base", model_max_length=args.max_length)
@@ -389,6 +389,8 @@ def main(args):
 
     for batch_idx, batch in enumerate(dataloader):
 
+        #logger.warning( f"Batch size : {batch.shape}")
+        #continue
         global_step += 1
         local_step += 1
 
@@ -409,6 +411,13 @@ def main(args):
         loss = model(**batch, labels=labels).loss
         scaled_loss = loss / args.gradient_accumulation
         scaled_loss.backward()
+
+        if torch.isnan(scaled_loss):
+            print( f"Nan at global step: {global_step}")
+            import sys 
+            sys.exit(0)
+
+        #logger.info( f"loss={scaled_loss.item()}")
 
         if global_step % args.gradient_accumulation != 0:
             continue
@@ -434,7 +443,10 @@ def main(args):
             current_model_directory = f"{args.save_dir}/model_{update_step}"
             logger.info(f"Saving model and optimizer to {current_model_directory}, update step {update_step}")
             os.makedirs(args.save_dir, exist_ok=True)
-            model.module.save_pretrained(current_model_directory, max_shard_size='100GB')
+            try:
+                model.module.save_pretrained(current_model_directory, max_shard_size='100GB')
+            except:
+                model.save_pretrained(current_model_directory, max_shard_size='100GB')
 
             if args.optimizer.lower() != 'galore_adamw8bit_per_layer':
                 optimizer_checkpoint = {
@@ -512,7 +524,10 @@ def main(args):
     if global_rank == 0 and not os.path.exists(current_model_directory):
         logger.info(f"Saving model and optimizer to {current_model_directory}, update step {update_step}")
         os.makedirs(args.save_dir, exist_ok=True)
-        model.module.save_pretrained(current_model_directory)
+        try:
+            model.module.save_pretrained(current_model_directory)
+        except:
+            model.save_pretrained(current_model_directory)
 
         if args.optimizer.lower() != 'galore_adamw8bit_per_layer':
             optimizer_checkpoint = {
@@ -539,7 +554,11 @@ def main(args):
     # Final evaluation
     logger.info("Running final evaluation")
     model.eval()
-    del loss, optimizer, scheduler
+    try: 
+        del loss, optimizer, scheduler
+    except:
+        logger.warning("optimizer not a thing?")
+    
     import gc; gc.collect()
     torch.cuda.empty_cache()
 

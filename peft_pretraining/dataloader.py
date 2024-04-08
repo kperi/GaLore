@@ -24,12 +24,18 @@ class MyDataset(IterableDataset):
             iter_data = list(iter_data)
         
         batch = []
-        for _ in range(12313125343):
-           
+        while True:   
+            
+            if len(iter_data) == 0:
+                break
+
+            
             start_pos = torch.randint( low = 0, high=len(iter_data)-self.max_length, size = (1,) )
             end_pos = start_pos+self.max_length 
             
+
             this_batch = iter_data[start_pos.item():end_pos.item()] 
+            #this_batch = iter_data[0:self.max_length]
             batch.append(  this_batch )
 
             if len(batch) == self.batch_size:
@@ -45,8 +51,6 @@ class MyDataset(IterableDataset):
 
         return {"input_ids": input_ids, "attention_mask": attention_mask}
 
-
-
 class PreprocessedIterableDataset(IterableDataset):
     def __init__(self, data, tokenizer, batch_size, max_length):
         super().__init__()
@@ -59,13 +63,12 @@ class PreprocessedIterableDataset(IterableDataset):
         worker_info = get_worker_info()
         if worker_info is None:
             # If no worker_info is provided, we are not using DataLoader workers, so yield all data
-            iter_data = self.data
+            iter_data = iter(self.data)
         else:
             # If using DataLoader workers, yield a subset of the data for this worker
             worker_id = worker_info.id
             num_workers = worker_info.num_workers
             iter_data = itertools.islice(self.data, worker_id, None, num_workers)
-            iter_data = list(iter_data)
 
         batch = []
         for example in iter_data:
@@ -79,7 +82,7 @@ class PreprocessedIterableDataset(IterableDataset):
             batch.append(tokenized_example)
 
             if len(batch) == self.batch_size:
-                yield torch.tensor(batch)
+                yield self._format_batch(batch)
                 batch = []
 
         if batch:
