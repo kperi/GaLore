@@ -445,7 +445,11 @@ def main(args):
             current_model_directory = f"{args.save_dir}/model_{update_step}"
             logger.info(f"Saving model and optimizer to {current_model_directory}, update step {update_step}")
             os.makedirs(args.save_dir, exist_ok=True)
-            model.module.save_pretrained(current_model_directory, max_shard_size='100GB')
+
+            try: 
+                model.module.save_pretrained(current_model_directory, max_shard_size='100GB')
+            except:
+                 model.save_pretrained(current_model_directory, max_shard_size='100GB')
 
             try:
                 optimizer_checkpoint = {
@@ -525,18 +529,25 @@ def main(args):
     if global_rank == 0 and not os.path.exists(current_model_directory):
         logger.info(f"Saving model and optimizer to {current_model_directory}, update step {update_step}")
         os.makedirs(args.save_dir, exist_ok=True)
-        model.module.save_pretrained(current_model_directory)
+        try:
+            model.module.save_pretrained(current_model_directory)
+        except:
+            model.save_pretrained(current_model_directory)
+            
 
-        optimizer_checkpoint = {
-            "optimizer": optimizer.state_dict(),
-            "scheduler": scheduler.state_dict(),
-            "update_step": update_step,
-            "global_step": global_step,
-            "config": run_config,
-            "wandb": wandb.run.dir,
-            "dtype": args.dtype,
-        }
-        torch.save(optimizer_checkpoint, f"{current_model_directory}/optimizer.pt")
+        try:
+            optimizer_checkpoint = {
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+                "update_step": update_step,
+                "global_step": global_step,
+                "config": run_config,
+                "wandb": wandb.run.dir,
+                "dtype": args.dtype,
+            }
+            torch.save(optimizer_checkpoint, f"{current_model_directory}/optimizer.pt")
+        except: 
+            logger.warning("Optimizer not a thing?")
 
         training_state_checkpoint = {
             "global_step": global_step,
